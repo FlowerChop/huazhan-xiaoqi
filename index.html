@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D粒子圣诞树</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        body {
+            overflow: hidden;
+            background: linear-gradient(to bottom, #1a1a2e, #16213e);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            touch-action: none;
+        }
+        
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        /* 背景文字样式 */
+        #background-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+            pointer-events: none;
+            text-align: center;
+            opacity: 0.6;
+        }
+        
+        .christmas-text {
+            font-size: clamp(3rem, 8vw, 8rem);
+            font-weight: bold;
+            color: rgba(212, 132, 132, 0.7);
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            letter-spacing: 0.2em;
+            transform: rotate(-5deg);
+            animation: textGlow 4s ease-in-out infinite alternate;
+        }
+        
+        @keyframes textGlow {
+            0% {
+                text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+                transform: rotate(-5deg) scale(1);
+            }
+            100% {
+                text-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+                transform: rotate(-5deg) scale(1.05);
+            }
+        }
+        
+        /* 加载提示 */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 102;
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 5px solid rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+            border-top: 5px solid #ff9a3c;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #nkhnk{
+            width: 50px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="background-text">
+            <div class="christmas-text">小琪宝宝圣诞快乐</div>
+            <img id="nkhnk" src="小琪.jpg" alt="">
+        </div>
+        <div id="loading">
+            <div class="spinner"></div>
+            <h1>花花提醒你请稍等一下哦加载中...</h1>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.min.js"></script>
+    <script>
+        // 检测移动设备
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // 初始化场景
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: true,
+            alpha: true // 允许透明背景
+        });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.getElementById('container').appendChild(renderer.domElement);
+        
+        // 添加轨道控制器
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        
+        // 移动端调整
+        if (isMobile) {
+            controls.enablePan = false;
+            controls.touchRotate = true;
+            controls.touchZoom = true;
+            controls.minDistance = 8;
+            controls.maxDistance = 25;
+        }
+        
+        // 设置相机位置
+        camera.position.set(0, 5, 15);
+        controls.update();
+        
+        // 添加环境光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        // 添加方向光
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+        
+        // 创建圣诞树粒子 - 黄色系
+        const treeParticles = [];
+        const treeGeometry = new THREE.BufferGeometry();
+        
+        // 创建黄色系粒子材质 - 粒子大小调整为0.1，确保圆形
+        const treeMaterial = new THREE.PointsMaterial({
+            color: 0xffd700, // 金色
+            size: 0.1,
+            sizeAttenuation: true
+        });
+        
+        // 创建松树形状的粒子
+        const treeHeight = 8;
+        const treeRadius = 3;
+        const particleCount = isMobile ? 3000 : 5000;
+        
+        for (let i = 0; i < particleCount; i++) {
+            // 创建锥形分布
+            const y = Math.random() * treeHeight;
+            const radius = treeRadius * (1 - y / treeHeight);
+            const angle = Math.random() * Math.PI * 2;
+            
+            const x = Math.cos(angle) * radius * (0.7 + Math.random() * 0.6);
+            const z = Math.sin(angle) * radius * (0.7 + Math.random() * 0.6);
+            
+            treeParticles.push(x, y, z);
+        }
+        
+        treeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(treeParticles, 3));
+        const tree = new THREE.Points(treeGeometry, treeMaterial);
+        scene.add(tree);
+        
+        // 创建树干
+        const trunkGeometry = new THREE.CylinderGeometry(0.5, 0.7, 2, 8);
+        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.y = -1;
+        scene.add(trunk);
+        
+        // 创建彩灯 - 使用圆形粒子
+        const lights = [];
+        const lightGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        
+        for (let i = 0; i < (isMobile ? 70 : 100); i++) {
+            const y = Math.random() * treeHeight;
+            const radius = treeRadius * (1 - y / treeHeight) * 0.8;
+            const angle = Math.random() * Math.PI * 2;
+            
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            
+            const lightMaterial = new THREE.MeshBasicMaterial({ 
+                color: new THREE.Color().setHSL(Math.random(), 1, 0.7),
+                emissive: new THREE.Color().setHSL(Math.random(), 1, 0.3)
+            });
+            
+            const light = new THREE.Mesh(lightGeometry, lightMaterial);
+            light.position.set(x, y, z);
+            scene.add(light);
+            lights.push(light);
+        }
+        
+        // 创建礼物
+        const gifts = [];
+        const giftColors = [0xff6b6b, 0x4ecdc4, 0x45b7d1, 0xffd166, 0x9b5de5, 0xf15bb5];
+        
+        // 创建默认纹理（不使用外部图片）
+        function createDefaultTexture(material) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            
+            // 绘制简单礼物图案
+            const hue = Math.random() * 360;
+            context.fillStyle = `hsl(${hue}, 70%, 80%)`;
+            context.fillRect(0, 0, 64, 64);
+            
+            // 绘制礼物带
+            context.fillStyle = `hsl(${hue}, 70%, 60%)`;
+            context.fillRect(0, 28, 64, 8);
+            context.fillRect(28, 0, 8, 64);
+            
+            // 绘制蝴蝶结
+            context.fillStyle = `hsl(${hue}, 70%, 90%)`;
+            context.beginPath();
+            context.arc(32, 32, 8, 0, Math.PI * 2);
+            context.fill();
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            material.map = texture;
+            material.needsUpdate = true;
+        }
+        
+        for (let i = 0; i < (isMobile ? 6 : 8); i++) {
+            const giftGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            const giftMaterial = new THREE.MeshLambertMaterial({ 
+                color: giftColors[Math.floor(Math.random() * giftColors.length)]
+            });
+            
+            const gift = new THREE.Mesh(giftGeometry, giftMaterial);
+            
+            // 随机放置在树下
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 2 + Math.random() * 3;
+            
+            gift.position.set(
+                Math.cos(angle) * distance,
+                0.4,
+                Math.sin(angle) * distance
+            );
+            
+            gift.rotation.y = Math.random() * Math.PI;
+            scene.add(gift);
+            gifts.push(gift);
+            
+            // 为前三个礼物添加默认纹理
+            if (i < 3) {
+                createDefaultTexture(giftMaterial);
+            }
+        }
+        
+        // 创建白色粒子地面 - 静止涟漪效果
+        const groundParticles = [];
+        const groundGeometry = new THREE.BufferGeometry();
+        const groundMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.1,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        // 创建地面粒子 - 静止涟漪效果
+        const groundWidth = 20;
+        const groundHeight = 20;
+        const groundParticleCount = isMobile ? 1200 : 2000;
+        
+        for (let i = 0; i < groundParticleCount; i++) {
+            const x = (Math.random() - 0.5) * groundWidth;
+            const z = (Math.random() - 0.5) * groundHeight;
+            
+            // 创建静止的涟漪效果 - 使用固定高度变化
+            const distance = Math.sqrt(x * x + z * z);
+            const y = -1.5 + 0.2 * Math.sin(distance * 2); // 移除时间因子，保持静止
+            
+            groundParticles.push(x, y, z);
+        }
+        
+        groundGeometry.setAttribute('position', new THREE.Float32BufferAttribute(groundParticles, 3));
+        const ground = new THREE.Points(groundGeometry, groundMaterial);
+        scene.add(ground);
+        
+        // 创建雪花粒子 - 圆形
+        const snowParticles = [];
+        const snowGeometry = new THREE.BufferGeometry();
+        const snowMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.1,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        for (let i = 0; i < (isMobile ? 700 : 1000); i++) {
+            const x = (Math.random() - 0.5) * 30;
+            const y = Math.random() * 15;
+            const z = (Math.random() - 0.5) * 30;
+            
+            snowParticles.push(x, y, z);
+        }
+        
+        snowGeometry.setAttribute('position', new THREE.Float32BufferAttribute(snowParticles, 3));
+        const snow = new THREE.Points(snowGeometry, snowMaterial);
+        scene.add(snow);
+        
+        // 创建粉红色爱心 - 贝塞尔曲线形状
+        const heartShape = new THREE.Shape();
+        
+        // 使用贝塞尔曲线创建爱心
+        heartShape.moveTo(0, 0.25);
+        heartShape.bezierCurveTo(0.2, 0, 0.5, 0, 0.5, 0.3);
+        heartShape.bezierCurveTo(0.5, 0.5, 0, 0.8, 0, 0.5);
+        heartShape.bezierCurveTo(0, 0.8, -0.5, 0.5, -0.5, 0.3);
+        heartShape.bezierCurveTo(-0.5, 0, -0.2, 0, 0, 0.25);
+        
+        const heartGeometry = new THREE.ExtrudeGeometry(heartShape, {
+            depth: 0.15,
+            bevelEnabled: true,
+            bevelThickness: 0.05,
+            bevelSize: 0.05,
+            bevelSegments: 10,
+            curveSegments: 20
+        });
+        
+        // 修复爱心倒置问题 - 添加X轴旋转
+        heartGeometry.rotateX(Math.PI);
+        
+        // 创建半透明爱心材质
+        const heartMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xff69b4, // 粉红色
+            transparent: true,
+            opacity: 0.7, // 设置透明度
+            emissive: 0xff1493,
+            emissiveIntensity: 0.3
+        });
+        
+        const heart = new THREE.Mesh(heartGeometry, heartMaterial);
+        heart.position.set(0, treeHeight + 0.5, 0); // 放在树顶
+        heart.scale.set(0.6, 0.6, 0.6);
+        scene.add(heart);
+        
+        // 动画变量
+        let time = 0;
+        
+        // 隐藏加载提示
+        setTimeout(() => {
+            document.getElementById('loading').style.display = 'none';
+        }, 1500);
+        
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.02;
+            
+            // 彩灯闪烁效果
+            lights.forEach((light, i) => {
+                const intensity = 0.5 + 0.5 * Math.sin(time * 5 + i);
+                light.material.emissiveIntensity = intensity;
+            });
+            
+            // 雪花飘落
+            const snowPositions = snowGeometry.attributes.position.array;
+            for (let i = 0; i < snowPositions.length; i += 3) {
+                snowPositions[i + 1] -= 0.02; // 下落
+                
+                // 如果雪花落到地面以下，重置到顶部
+                if (snowPositions[i + 1] < -1.5) {
+                    snowPositions[i + 1] = 15;
+                    snowPositions[i] = (Math.random() - 0.5) * 30;
+                    snowPositions[i + 2] = (Math.random() - 0.5) * 30;
+                }
+            }
+            snowGeometry.attributes.position.needsUpdate = true;
+            
+            // 爱心跳动
+            heart.scale.x = 0.6 + 0.05 * Math.sin(time * 3);
+            heart.scale.y = 0.6 + 0.05 * Math.sin(time * 3);
+            heart.rotation.y += 0.01;
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // 防止移动端默认行为
+        document.addEventListener('touchmove', function(e) {
+            if (e.scale !== 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>
